@@ -102,6 +102,9 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
         if message.author == self.user:
             return
 
+        # --- DEBUGGING STEP: Print message content to logs ---
+        print(f"Received message from {message.author}: {message.content}")
+
         # Process commands. This is crucial for commands.Bot to recognize and run your commands.
         await self.process_commands(message)
 
@@ -162,8 +165,6 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
                     activity_str = f"Streaming: {client.activity.name} ({client.activity.url})"
                 elif client.activity.type == discord.ActivityType.listening:
                     activity_str = f"Listening to: {client.activity.name}"
-                elif client.activity.type == discord.ActivityType.watching:
-                    activity_str = f"Watching: {client.activity.name}"
                 elif client.activity.type == discord.ActivityType.custom:
                     activity_str = f"Custom Status: {client.activity.name}"
                 elif client.activity.type == discord.ActivityType.competing:
