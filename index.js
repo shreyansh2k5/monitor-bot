@@ -4,10 +4,12 @@ require('dotenv').config();
 
 // Import necessary classes from the discord.js library
 const { Client, GatewayIntentBits, Partials, ActivityType } = require('discord.js');
+const http = require('http'); // Import Node.js's built-in http module for the web server
 
 // Retrieve bot token and monitor channel ID from environment variables
 const MONITOR_BOT_TOKEN = process.env.MONITOR_BOT_TOKEN;
 const MONITOR_CHANNEL_ID = process.env.MONITOR_CHANNEL_ID; // The ID of the channel where commands are expected
+const PORT = process.env.PORT || 3000; // Get port from Render's environment variable or default to 3000
 
 // Validate that essential environment variables are set
 if (!MONITOR_BOT_TOKEN) {
@@ -242,6 +244,17 @@ async function sendLongMessage(channel, content) {
         await new Promise(resolve => setTimeout(resolve, 1000)); 
     }
 }
+
+// Create a simple HTTP server to listen on the specified port.
+// This is required by platforms like Render to detect an open port and consider the service live.
+const server = http.createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'text/plain' });
+    res.end('Discord Monitor Bot is running!\n');
+});
+
+server.listen(PORT, () => {
+    console.log(`HTTP server listening on port ${PORT}`);
+});
 
 // Log in to Discord with your bot's token
 client.login(MONITOR_BOT_TOKEN)
