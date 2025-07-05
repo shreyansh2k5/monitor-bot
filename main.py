@@ -2,6 +2,17 @@ import os
 import discord
 import asyncio
 from dotenv import load_dotenv # Used for loading .env file during local development (though not for tokens in this setup)
+from flask import Flask, request # Import Flask for the web server
+
+# Initialize Flask app (this will run in a separate thread/task)
+app = Flask(__name__)
+
+@app.route('/')
+def home():
+    """
+    A simple home route for the web server. Render uses this to check if the service is alive.
+    """
+    return "Discord Monitor Bot is running!"
 
 # Define a custom client for each bot we want to monitor.
 # This allows us to log in each monitored bot separately and get its specific data.
@@ -151,11 +162,18 @@ class MonitorBot(discord.Client):
         # Send the compiled report message to the channel
         await channel.send(report_message)
 
+# Function to run the Flask app in a separate thread
+def run_flask_app():
+    """
+    Runs the Flask web server. This function will be executed in a separate thread
+    to avoid blocking the main Discord bot's asyncio event loop.
+    """
+    port = int(os.environ.get("PORT", 5000)) # Get port from Render's environment variable or default to 5000
+    app.run(host="0.0.0.0", port=port)
+
 # Main execution block
 if __name__ == "__main__":
     # Load environment variables from .env file (for local development only)
-    # This line is kept for completeness if you decide to use .env for other non-sensitive vars later,
-    # but it won't load tokens in this setup.
     load_dotenv() 
 
     # Get the monitor bot's token from environment variables
@@ -165,12 +183,6 @@ if __name__ == "__main__":
         exit(1) # Exit if the main bot token is missing
 
     # Define intents for the monitor bot.
-    # Intents tell Discord which events your bot wants to receive.
-    # - `discord.Intents.default()` provides common intents like guilds, members, messages.
-    # - `intents.message_content = True` is necessary to read message content (like commands).
-    # - `intents.presences = True` is crucial for getting activity and status of other bots.
-    #   Note: For bots in over 100 guilds, you might need to enable the "Presence Intent"
-    #   and "Server Members Intent" in the Discord Developer Portal under your bot's settings.
     intents = discord.Intents.default()
     intents.guilds = True
     intents.message_content = True
@@ -179,6 +191,14 @@ if __name__ == "__main__":
     # Create an instance of our MonitorBot
     monitor_client = MonitorBot(intents=intents)
     
+    # Run the Flask app in a separate thread.
+    # This allows the web server to run concurrently with the Discord bot.
+    import threading
+    flask_thread = threading.Thread(target=run_flask_app)
+    flask_thread.daemon = True # Allow the main program to exit even if this thread is still running
+    flask_thread.start()
+    print(f"Flask web server started on port {os.environ.get('PORT', 5000)}")
+
     # Run the monitor bot. This is a blocking call that keeps the bot running.
     try:
         monitor_client.run(monitor_bot_token)
