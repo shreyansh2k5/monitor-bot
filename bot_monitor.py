@@ -101,21 +101,30 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
         print(f"Monitor bot logged in as {self.user} (ID: {self.user.id})")
         print(f"Ready to monitor! Use slash commands like /monitor or /monitor_all.")
         
-        # Sync slash commands globally or to a specific guild for faster testing.
-        # For testing, it's recommended to sync to a specific guild ID first.
-        # Replace YOUR_GUILD_ID with the ID of your test Discord server.
-        # If you want global commands (can take up to an hour to propagate), remove guild=...
-        # guild_id = os.getenv("TEST_GUILD_ID") # You can set this env var for testing
+        # Sync slash commands globally.
+        # This is crucial for new commands or command signature changes to be recognized by Discord.
+        # It can take up to an hour for global commands to propagate, but often much faster.
+        # For immediate testing, you can uncomment the guild-specific sync below
+        # and provide a TEST_GUILD_ID environment variable on Render.
+        try:
+            await self.tree.sync() # Global sync
+            print("Slash commands synced globally.")
+        except Exception as e:
+            print(f"Failed to sync global slash commands: {e}")
+
+        # Example of syncing to a specific guild for faster testing:
+        # guild_id = os.getenv("TEST_GUILD_ID") # Set this env var on Render for your test server ID
         # if guild_id:
-        #     self.tree.copy_global_commands(guild=discord.Object(id=int(guild_id)))
-        #     await self.tree.sync(guild=discord.Object(id=int(guild_id)))
+        #     try:
+        #         guild_obj = discord.Object(id=int(guild_id))
+        #         self.tree.copy_global_commands(guild=guild_obj) # Copy global commands to this guild
+        #         await self.tree.sync(guild=guild_obj) # Sync specifically to this guild
+        #         print(f"Slash commands synced to guild ID: {guild_id}")
+        #     except Exception as e:
+        #         print(f"Failed to sync slash commands to guild {guild_id}: {e}")
         # else:
-        #     await self.tree.sync() # Global sync (can take time)
-        
-        # For simplicity and immediate testing, we'll sync globally here.
-        # In production, consider syncing to specific guilds if your bot is large.
-        await self.tree.sync() # Syncs all commands globally
-        print("Slash commands synced.")
+        #     print("No TEST_GUILD_ID found for guild-specific command syncing.")
+
 
     @app_commands.command(name="monitor", description="Get detailed status for a specific monitored bot.")
     @app_commands.describe(bot_name="The name of the bot to monitor (e.g., MyAwesomeBot)")
