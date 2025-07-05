@@ -2,7 +2,7 @@ import os
 import discord
 import asyncio
 from discord.ext import commands
-from discord import app_commands # Import app_commands specifically for slash commands
+from discord import app_commands # Import app_commands for slash commands
 
 # Define a custom client for each bot we want to monitor.
 # This allows us to log in each monitored bot separately and get its specific data.
@@ -32,7 +32,7 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
     """
     def __init__(self, *args, **kwargs):
         # We don't need a command_prefix for slash commands, but commands.Bot requires it.
-        # It's good practice to set it to an unused prefix if only using slash commands.
+        # We can set it to an unused prefix or handle it carefully.
         super().__init__(command_prefix="!", *args, **kwargs) 
         self.monitored_bots_config = [] # Stores configuration for bots to monitor (name, token)
         self.monitored_bot_clients = {} # Stores active MonitoredBotClient instances
@@ -41,9 +41,11 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
         # It's crucial to convert it to an integer.
         self.target_channel_id = int(os.getenv("MONITOR_CHANNEL_ID")) 
 
-        # Add the slash commands to the command tree. This prepares them for syncing with Discord.
-        self.tree.add_command(self.monitor_bot_command)
-        self.tree.add_command(self.monitor_all_bots_command)
+        # --- IMPORTANT CHANGE HERE ---
+        # Instead of self.tree.add_command, we will use @self.tree.command directly
+        # on the methods below. So, these lines are removed from __init__.
+        # self.tree.add_command(self.monitor_bot_command)
+        # self.tree.add_command(self.monitor_all_bots_command)
 
     async def setup_hook(self):
         """
@@ -52,7 +54,7 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
         """
         print("Monitor bot setup_hook started.")
         # Load monitored bot tokens and names from environment variables.
-        # It iterates through BOT_TOKEN_1, BOT_TOKEN_2, etc., until one is not found.
+        # We expect variables like BOT_TOKEN_1, BOT_NAME_1, BOT_TOKEN_2, BOT_NAME_2, etc.
         i = 1
         while True:
             token_env_var = f"BOT_TOKEN_{i}"
@@ -72,20 +74,22 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
 
         # For each configured bot, create a MonitoredBotClient instance and start it.
         for bot_info in self.monitored_bots_config:
-            # Intents are crucial for monitored bots too. They need `presences` and `guilds`
-            # to gather status, activity, and server count information.
+            # Intents are crucial. For monitoring, we need default intents which include guilds,
+            # and specifically `presences` to get activity and status.
             # IMPORTANT: For these intents to work, you MUST enable "Presence Intent" and
             # "Server Members Intent" in the Discord Developer Portal for EACH bot
             # (your monitor bot AND all monitored bots).
+            # Go to https://discord.com/developers/applications/, select your bot,
+            # go to "Bot" section, and toggle these intents ON.
             client = MonitoredBotClient(bot_info["token"], bot_info["name"], intents=discord.Intents.default())
             client.intents.presences = True 
-            client.intents.guilds = True # This allows the monitored bot client to know its guilds.
+            client.intents.guilds = True
             
             # Store the client instance by its name for easy lookup
             self.monitored_bot_clients[bot_info["name"]] = client
             
             # Run each monitored bot in a separate asyncio task.
-            # This allows all bots to log in and operate concurrently without blocking the main monitor bot's loop.
+            # This allows all bots to log in and operate concurrently without blocking the main monitor bot.
             asyncio.create_task(client.start(bot_info["token"]))
             
             # Add a small delay to allow the bot to attempt login.
@@ -95,60 +99,55 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
     async def on_ready(self):
         """
         Event handler called when the main monitor bot successfully logs in.
-        This is where slash commands are synced.
         """
         print(f"Monitor bot logged in as {self.user} (ID: {self.user.id})")
         print(f"Ready to monitor! Use slash commands like /monitor or /monitor_all.")
         
-        # Sync slash commands. This is a critical section for your issue.
+        # Sync slash commands.
         # For immediate testing, it's highly recommended to sync to a specific guild.
         # Global sync can take up to an hour to propagate.
         guild_id = os.getenv("TEST_GUILD_ID") # Get test guild ID from environment variable
 
         if guild_id:
             try:
-                # Convert guild_id to int. If not a valid integer, it falls back to global sync.
                 guild_obj = discord.Object(id=int(guild_id))
                 # If you want global commands to also show up in your test guild immediately,
                 # you can uncomment the next line. Otherwise, for guild-specific commands only, keep it commented.
                 # self.tree.copy_global_commands(guild=guild_obj) 
-                await self.tree.sync(guild=guild_obj) # Sync specifically to this guild for fast testing.
+                await self.tree.sync(guild=guild_obj) # Sync specifically to this guild
                 print(f"Slash commands synced to guild ID: {guild_id}")
             except ValueError:
                 print(f"Error: TEST_GUILD_ID '{guild_id}' is not a valid integer. Please check your environment variable.")
-                await self.tree.sync() # Fallback to global sync if guild ID is invalid.
+                await self.tree.sync() # Fallback to global sync if guild ID is invalid
                 print("Falling back to global slash command sync.")
             except Exception as e:
-                # Catches other errors during guild sync, falls back to global.
                 print(f"Failed to sync slash commands to guild {guild_id}: {e}")
-                await self.tree.sync() # Fallback to global sync on other errors.
+                await self.tree.sync() # Fallback to global sync on other errors
                 print("Falling back to global slash command sync.")
         else:
             try:
-                await self.tree.sync() # Global sync (can take significant time for propagation).
+                await self.tree.sync() # Global sync (can take time)
                 print("No TEST_GUILD_ID found. Slash commands synced globally.")
             except Exception as e:
                 print(f"Failed to sync global slash commands: {e}")
 
-    # Slash command definitions:
-    # Use @app_commands.command decorator to define a slash command.
+
+    # --- IMPORTANT CHANGE HERE ---
+    # Using @self.tree.command directly on the method.
     @app_commands.command(name="monitor", description="Get detailed status for a specific monitored bot.")
     @app_commands.describe(bot_name="The name of the bot to monitor (e.g., MyAwesomeBot)")
     async def monitor_bot_command(self, interaction: discord.Interaction, bot_name: str):
         """
         Slash command to get the status of a single specified bot.
         """
-        # Acknowledge the command immediately to prevent "Application did not respond" errors.
-        await interaction.response.defer(ephemeral=False) 
+        await interaction.response.defer(ephemeral=False) # Acknowledge the command immediately
 
-        # Check if the command is used in the designated monitoring channel.
         if interaction.channel_id != self.target_channel_id:
             await interaction.followup.send(f"Please use this command in the designated monitoring channel: <#{self.target_channel_id}>", ephemeral=True)
             return
 
         bot_name_lower = bot_name.lower()
         found_client = None
-        # Find the requested bot client (case-insensitive)
         for name, client in self.monitored_bot_clients.items():
             if name.lower() == bot_name_lower:
                 found_client = client
@@ -156,25 +155,25 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
         
         if found_client:
             report_message = await self._generate_single_bot_report(found_client)
-            await interaction.followup.send(report_message) # Send the report.
+            await interaction.followup.send(report_message)
         else:
             await interaction.followup.send(f"Bot '{bot_name}' not found or not configured for monitoring. Available bots: {', '.join(self.monitored_bot_clients.keys())}")
 
+    # --- IMPORTANT CHANGE HERE ---
+    # Using @self.tree.command directly on the method.
     @app_commands.command(name="monitor_all", description="Get status for all configured monitored bots.")
     async def monitor_all_bots_command(self, interaction: discord.Interaction):
         """
         Slash command to get the status of all configured bots.
         """
-        # Acknowledge the command immediately.
-        await interaction.response.defer(ephemeral=False) 
+        await interaction.response.defer(ephemeral=False) # Acknowledge the command immediately
 
-        # Check if the command is used in the designated monitoring channel.
         if interaction.channel_id != self.target_channel_id:
             await interaction.followup.send(f"Please use this command in the designated monitoring channel: <#{self.target_channel_id}>", ephemeral=True)
             return
 
         report_message = await self._generate_full_report()
-        await interaction.followup.send(report_message) # Send the full report.
+        await interaction.followup.send(report_message)
 
     async def _generate_single_bot_report(self, client: MonitoredBotClient) -> str:
         """
@@ -182,12 +181,11 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
         """
         report_message = f"--- **{client.bot_name}** ---\n"
         
-        if client.is_ready and client.user: # Check if the bot successfully logged in.
+        if client.is_ready and client.user:
             report_message += f"Status: Online ✅\n"
             report_message += f"Servers: {len(client.guilds)} 🌐\n"
-            report_message += f"Latency: {client.latency * 1000:.2f} ms ⏱️\n" # Latency in milliseconds.
+            report_message += f"Latency: {client.latency * 1000:.2f} ms ⏱️\n"
             
-            # Display current activity.
             activity_str = "No activity set"
             if client.activity:
                 if client.activity.type == discord.ActivityType.playing:
@@ -204,9 +202,9 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
                     activity_str = f"Competing in: {client.activity.name}"
             report_message += f"Activity: {activity_str}\n"
             
-            report_message += f"User Status: {client.status.name.capitalize()}\n" # Online, idle, dnd, offline.
+            report_message += f"User Status: {client.status.name.capitalize()}\n"
 
-            # Add server names to the report.
+            # Add server names
             if client.guilds:
                 server_names = [guild.name for guild in client.guilds]
                 report_message += f"Servers List: {', '.join(server_names)}\n"
@@ -224,7 +222,6 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
         """
         report_message = "📊 **Discord Bot Monitoring Report** 📊\n\n"
         
-        # Iterate through all configured monitored bots and generate individual reports.
         for bot_name, client in self.monitored_bot_clients.items():
             report_message += await self._generate_single_bot_report(client)
             report_message += "\n" # Add a newline for separation between bots
