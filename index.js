@@ -85,7 +85,7 @@ monitorClient.once('ready', async () => {
                 monitorClient.monitoredBotClients.set(name.toLowerCase(), monitoredBot); // Store by lowercase name for lookup
                 console.log(`Successfully logged in and added monitored bot: ${name}`);
             } catch (error) {
-                console.error(`Failed to log in monitored bot '${name}':`, error.message);
+                console.error(`Failed to log in monitored bot '${name}': ${error.message}`); // Improved error logging
             }
             i++;
             await new Promise(resolve => setTimeout(resolve, 2000)); // Small delay to avoid rate limits
@@ -102,17 +102,23 @@ monitorClient.on('interactionCreate', async interaction => {
 
     // Ensure the command is used in the designated monitoring channel
     if (interaction.channelId !== targetChannelId) {
+        // If the interaction is not in the target channel, reply ephemerally
+        // and do not defer, as deferring might lead to unknown interaction if
+        // the initial reply is too slow or the channel check itself causes delay.
         await interaction.reply({
             content: `Please use this command in the designated monitoring channel: <#${targetChannelId}>`,
-            ephemeral: true // Only the user who sent the command can see this
+            ephemeral: true
         });
         return;
     }
 
+    // Defer reply immediately for all commands in the correct channel
+    // This prevents the "Unknown interaction" error by acknowledging the command within 3 seconds.
+    await interaction.deferReply({ ephemeral: false }); 
+
     const { commandName } = interaction;
 
     if (commandName === 'monitor') {
-        await interaction.deferReply({ ephemeral: false }); // Acknowledge command immediately
         const botName = interaction.options.getString('bot_name');
         const monitoredBot = monitorClient.monitoredBotClients.get(botName.toLowerCase());
 
@@ -124,7 +130,6 @@ monitorClient.on('interactionCreate', async interaction => {
             await interaction.editReply(`Bot '${botName}' not found or not configured for monitoring. Available bots: ${availableBots || 'None'}`);
         }
     } else if (commandName === 'monitor_all') {
-        await interaction.deferReply({ ephemeral: false }); // Acknowledge command immediately
         const report = generateFullReport(monitorClient.monitoredBotClients);
         await interaction.editReply(report);
     }
