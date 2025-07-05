@@ -57,6 +57,9 @@ client.once('ready', () => {
  * This is where prefix commands are processed.
  */
 client.on('messageCreate', async message => {
+    // --- DEBUGGING STEP: Log every message received ---
+    console.log(`[DEBUG] Received message from ${message.author.tag} in #${message.channel.name}: ${message.content}`);
+
     // Ignore messages from other bots or webhooks to prevent infinite loops or unwanted responses.
     if (message.author.bot || message.webhookId) {
         return;
@@ -65,6 +68,7 @@ client.on('messageCreate', async message => {
     // Check if the message was sent in the designated monitoring channel.
     // If not, ignore it to keep command usage organized.
     if (message.channel.id !== targetChannelId.toString()) { // Compare string IDs
+        console.log(`[DEBUG] Message not in target channel. Expected: ${targetChannelId}, Got: ${message.channel.id}`);
         return;
     }
 
@@ -73,6 +77,7 @@ client.on('messageCreate', async message => {
 
     // Handle the "!monitor_all" command
     if (messageContent === `${prefix}monitor_all`) {
+        console.log(`[DEBUG] Executing !monitor_all command.`);
         await handleMonitorAllCommand(message);
     } 
     // Handle the "!monitor <bot_name>" command
@@ -82,11 +87,15 @@ client.on('messageCreate', async message => {
         const botName = args.join(' '); // Get the rest as bot name
 
         if (command === 'monitor' && botName) {
+            console.log(`[DEBUG] Executing !monitor command for bot: ${botName}`);
             await handleMonitorCommand(message, botName);
         } else {
             // If no bot name is provided, send a usage message.
+            console.log(`[DEBUG] Invalid !monitor command usage.`);
             await message.channel.send(`Usage: \`${prefix}monitor <bot_name>\``);
         }
+    } else {
+        console.log(`[DEBUG] Message is not a recognized command.`);
     }
 });
 
@@ -139,7 +148,7 @@ function generateSingleBotReport(botUser, guild) {
 function getEmojiForStatus(status) {
     switch (status) {
         case 'online': return '✅';
-        case 'idle': return '🌙';
+        case 'idle': return '�';
         case 'dnd': return '⛔';
         case 'offline': return '❌';
         default: return '❓'; // Unknown status
