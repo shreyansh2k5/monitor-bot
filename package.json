@@ -1,1 +1,17 @@
-
+{
+  "name": "monitor-bot",
+  "version": "1.0.0",
+  "description": "A Discord bot to monitor other Discord bots' activities.",
+  "main": "index.js",
+  "scripts": {
+    "start": "node index.js"
+  },
+  "keywords": [],
+  "author": "Your Name",
+  "license": "ISC",
+  "dependencies": {
+    "discord.js": "^14.0.0",
+    "dotenv": "^16.0.0"
+  },
+  "type": "module"
+}
