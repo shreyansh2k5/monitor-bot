@@ -3,6 +3,7 @@ import asyncio
 import threading
 from dotenv import load_dotenv
 from flask import Flask, request
+import discord # <--- ADDED THIS LINE
 
 # Import the MonitorBot class from our new bot_monitor.py file
 from bot_monitor import MonitorBot
