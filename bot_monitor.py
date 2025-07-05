@@ -99,6 +99,15 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
         
         # No slash command syncing needed for prefix commands
 
+    # --- ADD THIS on_message EVENT ---
+    async def on_message(self, message):
+        # Ignore messages from the bot itself to prevent infinite loops
+        if message.author == self.user:
+            return
+
+        # Process commands. This is crucial for commands.Bot to recognize and run your commands.
+        await self.process_commands(message)
+
     # --- PREFIX COMMANDS ---
     # Use @commands.command decorator for prefix commands
     @commands.command(name="monitor", description="Get detailed status for a specific monitored bot.")
@@ -149,7 +158,7 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
         
         if client.is_ready and client.user:
             report_message += f"Status: Online ✅\n"
-            report_message += f"Servers: {len(client.guilds)} 🌐\n"
+            report_message += f"Servers: {len(client.guilds)} �\n"
             report_message += f"Latency: {client.latency * 1000:.2f} ms ⏱️\n"
             
             activity_str = "No activity set"
@@ -160,8 +169,6 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
                     activity_str = f"Streaming: {client.activity.name} ({client.activity.url})"
                 elif client.activity.type == discord.ActivityType.listening:
                     activity_str = f"Listening to: {client.activity.name}"
-                elif client.activity.type == discord.ActivityType.watching:
-                    activity_str = f"Watching: {client.activity.name}"
                 elif client.activity.type == discord.ActivityType.custom:
                     activity_str = f"Custom Status: {client.activity.name}"
                 elif client.activity.type == discord.ActivityType.competing:
@@ -193,3 +200,4 @@ class MonitorBot(commands.Bot): # Inherit from commands.Bot for easier command h
             report_message += "\n" # Add a newline for separation between bots
         
         return report_message
+�
