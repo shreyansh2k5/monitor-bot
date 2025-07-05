@@ -68,9 +68,12 @@ class MonitorBot(discord.Client):
         for bot_info in self.monitored_bots_config:
             # Intents are crucial. For monitoring, we need default intents which include guilds,
             # and specifically `presences` to get activity and status.
+            # IMPORTANT: For these intents to work, you MUST enable "Presence Intent" and
+            # "Server Members Intent" in the Discord Developer Portal for EACH bot
+            # (your monitor bot AND all monitored bots).
+            # Go to https://discord.com/developers/applications/, select your bot,
+            # go to "Bot" section, and toggle these intents ON.
             client = MonitoredBotClient(bot_info["token"], bot_info["name"], intents=discord.Intents.default())
-            # Enable specific intents for the monitored bots if they are not already enabled by default.
-            # `presences` is needed for activity/status, `guilds` for server count.
             client.intents.presences = True 
             client.intents.guilds = True
             
