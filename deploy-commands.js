@@ -31,6 +31,24 @@ const commands = [
         name: 'monitor_all',
         description: 'Get status for all configured monitored bots.',
     },
+    {
+        name: 'leave_server',
+        description: 'Make a monitored bot leave a specific server.',
+        options: [
+            {
+                name: 'bot_name',
+                type: 3, // String type
+                description: 'The name of the bot to make leave the server (e.g., MyAwesomeBot)',
+                required: true,
+            },
+            {
+                name: 'server_id',
+                type: 3, // String type (Discord IDs are strings)
+                description: 'The ID of the server the bot should leave',
+                required: true,
+            },
+        ],
+    },
 ];
 
 // Create a REST instance with your bot's token
