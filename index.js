@@ -23,14 +23,10 @@ app.listen(port, () => {
 // --- Discord Bot Setup ---
 
 // Define intents for the main monitor bot.
-// GatewayIntentBits.Guilds: Required to access guild (server) information.
-// GatewayIntentBits.GuildPresences: CRUCIAL for monitoring bot activity and status.
-//    You MUST enable "Presence Intent" in the Discord Developer Portal for your monitor bot.
-// GatewayIntentBits.MessageContent: Required to read message content (if you were using text commands, not strictly needed for slash commands).
 const monitorBotIntents = [
     GatewayIntentBits.Guilds,
     GatewayIntentBits.GuildPresences,
-    GatewayIntentBits.MessageContent, // Good practice to include for general bot functionality
+    GatewayIntentBits.MessageContent,
 ];
 
 // Create the main Discord client for the monitor bot
@@ -49,24 +45,19 @@ if (!targetChannelId) {
 // Event: Main monitor bot is ready
 monitorClient.once('ready', async () => {
     console.log(`Monitor bot logged in as ${monitorClient.user.tag}`);
-    console.log(`Ready to monitor! Use slash commands like /monitor or /monitor_all.`);
+    console.log(`Ready to monitor! Use slash commands like /monitor, /monitor_all, or /leave_server.`);
 
     // Load monitored bot tokens and names from environment variables.
-    // We expect variables like BOT_TOKEN_1, BOT_NAME_1, BOT_TOKEN_2, BOT_NAME_2, etc.
     let i = 1;
     while (true) {
         const token = process.env[`BOT_TOKEN_${i}`];
         const name = process.env[`BOT_NAME_${i}`];
 
         if (token && name) {
-            // Define intents for each monitored bot.
-            // Guilds and GuildPresences are essential for getting their server count, activity, and status.
-            // You MUST enable "Presence Intent" and "Server Members Intent" in the Discord Developer Portal
-            // for EACH of your monitored bots.
             const monitoredBotIntents = [
                 GatewayIntentBits.Guilds,
                 GatewayIntentBits.GuildPresences,
-                GatewayIntentBits.MessageContent, // Include for monitored bots too if they use text commands
+                GatewayIntentBits.MessageContent,
             ];
             
             const monitoredBot = new Client({ intents: monitoredBotIntents });
@@ -85,12 +76,12 @@ monitorClient.once('ready', async () => {
                 monitorClient.monitoredBotClients.set(name.toLowerCase(), monitoredBot); // Store by lowercase name for lookup
                 console.log(`Successfully logged in and added monitored bot: ${name}`);
             } catch (error) {
-                console.error(`Failed to log in monitored bot '${name}': ${error.message}`); // Improved error logging
+                console.error(`Failed to log in monitored bot '${name}': ${error.message}`);
             }
             i++;
             await new Promise(resolve => setTimeout(resolve, 2000)); // Small delay to avoid rate limits
         } else {
-            break; // Stop if no more BOT_TOKEN_X variables are found
+            break;
         }
     }
     console.log(`Monitoring ${monitorClient.monitoredBotClients.size} bots.`);
@@ -102,9 +93,6 @@ monitorClient.on('interactionCreate', async interaction => {
 
     // Ensure the command is used in the designated monitoring channel
     if (interaction.channelId !== targetChannelId) {
-        // If the interaction is not in the target channel, reply ephemerally
-        // and do not defer, as deferring might lead to unknown interaction if
-        // the initial reply is too slow or the channel check itself causes delay.
         await interaction.reply({
             content: `Please use this command in the designated monitoring channel: <#${targetChannelId}>`,
             ephemeral: true
@@ -113,7 +101,6 @@ monitorClient.on('interactionCreate', async interaction => {
     }
 
     // Defer reply immediately for all commands in the correct channel
-    // This prevents the "Unknown interaction" error by acknowledging the command within 3 seconds.
     await interaction.deferReply({ ephemeral: false }); 
 
     const { commandName } = interaction;
@@ -132,6 +119,31 @@ monitorClient.on('interactionCreate', async interaction => {
     } else if (commandName === 'monitor_all') {
         const report = generateFullReport(monitorClient.monitoredBotClients);
         await interaction.editReply(report);
+    } else if (commandName === 'leave_server') {
+        const botName = interaction.options.getString('bot_name');
+        const serverId = interaction.options.getString('server_id');
+
+        const monitoredBot = monitorClient.monitoredBotClients.get(botName.toLowerCase());
+
+        if (!monitoredBot) {
+            const availableBots = monitorClient.monitoredBotClients.map(client => client.botName).join(', ');
+            await interaction.editReply(`Bot '${botName}' not found or not configured for monitoring. Available bots: ${availableBots || 'None'}`);
+            return;
+        }
+
+        try {
+            const guild = await monitoredBot.guilds.fetch(serverId);
+            if (guild) {
+                await guild.leave();
+                await interaction.editReply(`Successfully made bot '${botName}' leave server '${guild.name}' (ID: ${serverId}).`);
+                console.log(`Bot '${botName}' left server '${guild.name}' (ID: ${serverId}).`);
+            } else {
+                await interaction.editReply(`Bot '${botName}' is not in a server with ID '${serverId}'.`);
+            }
+        } catch (error) {
+            console.error(`Error making bot '${botName}' leave server '${serverId}':`, error);
+            await interaction.editReply(`Failed to make bot '${botName}' leave server '${serverId}'. Error: ${error.message}`);
+        }
     }
 });
 
@@ -181,10 +193,10 @@ function generateSingleBotReport(client) {
         const userStatus = client.user.presence?.status || 'offline';
         reportMessage += `User Status: ${userStatus.charAt(0).toUpperCase() + userStatus.slice(1)}\n`;
 
-        // Add server names
+        // Add server names and IDs
         if (client.guilds.cache.size > 0) {
-            const serverNames = client.guilds.cache.map(guild => guild.name).join(', ');
-            reportMessage += `Servers List: ${serverNames}\n`;
+            const serverList = client.guilds.cache.map(guild => `${guild.name} (ID: ${guild.id})`).join('\n - ');
+            reportMessage += `Servers List:\n - ${serverList}\n`;
         } else {
             reportMessage += "Servers List: Not in any servers.\n";
         }
